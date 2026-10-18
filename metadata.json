@@ -1,0 +1,5 @@
+{
+  "name": "Growing Math",
+  "description": "Uma plataforma inteligente e gamificada de ensino de matemática adaptativa.",
+  "requestFramePermissions": ["camera", "microphone"]
+}

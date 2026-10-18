@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 540" fill="none">
+  <rect width="860" height="540" rx="18" fill="#ECECEC"/>
+  <g stroke="#77A763" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="#C7E58F">
+    <path d="M571 404c59 0 92-35 100-81 9-55-13-108-72-132-75-31-182-2-241 49-52 45-82 118-57 165 22 42 63 64 130 64h140z"/>
+    <path d="M559 186c75 13 139-24 195-50-22 42-39 76-27 123"/>
+    <path d="M663 172c20 12 37 32 46 57"/>
+    <path d="M282 300c-34 28-66 71-95 97"/>
+    <path d="M282 300c33-20 62-47 75-94"/>
+    <path d="M357 206c30-62 103-97 158-86 44 9 73 36 92 58"/>
+    <path d="M437 404c-18 19-29 45-34 71"/>
+    <path d="M551 406c1 25 12 49 31 71"/>
+    <path d="M714 293c8 34 8 70 0 103"/>
+    <path d="M709 304c22 16 44 26 70 33"/>
+  </g>
+  <g stroke="#6E9E54" stroke-width="4" fill="#D4EFA8">
+    <path d="M578 188c76 20 120 73 136 150-49-39-106-56-161-55-28-39-38-58-64-84 26-8 58-16 89-11z"/>
+    <path d="M602 203c36 33 59 74 69 119"/>
+    <path d="M644 194c51 44 79 101 82 157"/>
+  </g>
+  <g fill="#63B247" font-family="Arial, sans-serif" font-weight="700">
+    <text x="500" y="355" font-size="58">×</text>
+    <text x="606" y="259" font-size="52">÷</text>
+    <text x="696" y="332" font-size="56">×</text>
+    <text x="375" y="346" font-size="56">×</text>
+    <text x="292" y="318" font-size="56">+</text>
+  </g>
+  <g>
+    <path d="M362 224l-40-35 56 3-16 32z" fill="#C7E58F" stroke="#77A763" stroke-width="6"/>
+    <path d="M402 176l-26 67" stroke="#77A763" stroke-width="8" stroke-linecap="round"/>
+    <path d="M441 173l-24 66" stroke="#77A763" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="410" cy="228" r="9" fill="#4C8F37"/>
+    <path d="M353 262c31-18 67-17 99 1l-8 11c-30-8-57-7-82 4l-9-16z" fill="#A53E35" stroke="#77A763" stroke-width="5"/>
+    <path d="M364 264l8 14M380 263l7 15M397 262l8 16M413 262l8 16M429 263l7 15" stroke="#F1F1F1" stroke-width="3"/>
+  </g>
+  <g>
+    <path d="M315 266c-57 3-125 16-181 43-36 18-63 42-76 70 34-9 61-6 95 6 44 15 95 9 142-8 54-19 83-47 99-83-21-17-45-28-79-28z" fill="#D9FF9D" stroke="#8BCF4E" stroke-width="6"/>
+    <path d="M136 311l22 14M176 327l24 9M203 289l19 10M241 331l20 8M112 353l19 10" stroke="#79C53A" stroke-width="6" stroke-linecap="round"/>
+    <g fill="#5EC63A" font-family="Arial, sans-serif" font-weight="700">
+      <text x="78" y="358" font-size="52">+</text>
+      <text x="158" y="343" font-size="50">×</text>
+      <text x="112" y="323" font-size="44">−</text>
+      <text x="214" y="360" font-size="52">×</text>
+      <text x="246" y="332" font-size="48">÷</text>
+    </g>
+  </g>
+</svg>

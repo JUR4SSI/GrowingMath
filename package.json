@@ -1,0 +1,110 @@
+{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.90",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "rebuild:native:node": "npm rebuild better-sqlite3",
+    "rebuild:native:electron": "electron-rebuild -f -w better-sqlite3",
+    "dev": "npm run rebuild:native:node && tsx server.ts",
+    "build": "vite build",
+    "build:web": "vite build",
+    "build:server": "node scripts/build-server.mjs",
+    "build:main": "set NODE_OPTIONS=--max-old-space-size=4096 && npx vite build --mode main",
+    "build:teacher": "set NODE_OPTIONS=--max-old-space-size=4096 && npx vite build --mode teacher",
+    "pack:portable": "npm run rebuild:native:electron && npm run build:main && npm run build:teacher && npm run build:server && electron-builder --win dir",
+    "pack:installer:base": "npm run rebuild:native:electron && npm run build:main && npm run build:teacher && npm run build:server && electron-builder --win nsis",
+    "pack:installer": "node scripts/versioning.mjs",
+    "pack:all": "npm run rebuild:native:electron && npm run build:web && npm run build:server && electron-builder --win dir nsis",
+    "preview": "vite preview",
+    "clean": "rimraf dist build release",
+    "lint": "tsc --noEmit",
+    "smoke:prepare": "npm run rebuild:native:node && npm run build && node scripts/build-server.mjs",
+    "smoke:security": "node scripts/smoke-security.mjs",
+    "smoke:remote": "node scripts/smoke-remote.mjs",
+    "smoke": "npm run smoke:prepare && npm run smoke:security && npm run smoke:remote"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/canvas-confetti": "^1.9.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^12.4.1",
+    "canvas-confetti": "^1.9.4",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.13.1",
+    "recharts": "^3.7.0",
+    "tailwind-merge": "^3.5.0",
+    "vite": "^6.2.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "cross-env": "^10.1.0",
+    "electron": "^36.3.2",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.25.10",
+    "rimraf": "^6.0.1",
+    "rollup-plugin-visualizer": "^7.0.1",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  },
+  "build": {
+    "appId": "com.growingmath.app",
+    "productName": "Growing Math",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "build/**",
+      "electron/**",
+      "package.json",
+      "node_modules/**"
+    ],
+    "npmRebuild": false,
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "installer/install-ai.ps1",
+        "to": "install-ai.ps1"
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "requestedExecutionLevel": "asInvoker",
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "installer/installer.nsh"
+    }
+  }
+}

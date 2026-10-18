@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 540" fill="none">
+  <rect width="860" height="540" rx="18" fill="#ECECEC"/>
+  <g stroke="#77A763" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="#C7E58F">
+    <path d="M570 404c59 0 92-35 100-81 9-55-13-108-72-132-75-31-182-2-241 49-52 45-82 118-57 165 22 42 63 64 130 64h140z"/>
+    <path d="M557 186c76 10 138-30 186-56-17 42-30 76-20 122"/>
+    <path d="M661 172c20 12 37 32 46 57"/>
+    <path d="M280 300c-36 28-68 72-95 98"/>
+    <path d="M280 300c31-19 58-45 70-88"/>
+    <path d="M350 212c23-62 95-101 150-93 46 7 76 35 95 58"/>
+    <path d="M435 404c-18 19-29 45-34 71"/>
+    <path d="M548 406c1 25 12 49 31 71"/>
+    <path d="M713 293c8 34 8 70 0 103"/>
+    <path d="M706 304c22 16 44 26 70 33"/>
+  </g>
+  <g stroke="#6E9E54" stroke-width="4" fill="#D4EFA8">
+    <path d="M575 188c76 20 120 73 136 150-49-39-106-56-161-55-28-39-38-58-64-84 26-8 58-16 89-11z"/>
+    <path d="M598 203c36 33 59 74 69 119"/>
+    <path d="M640 194c51 44 79 101 82 157"/>
+  </g>
+  <g fill="#63B247" font-family="Arial, sans-serif" font-weight="700">
+    <text x="496" y="355" font-size="58">×</text>
+    <text x="602" y="259" font-size="52">÷</text>
+    <text x="694" y="332" font-size="56">×</text>
+    <text x="371" y="346" font-size="56">×</text>
+    <text x="289" y="318" font-size="56">+</text>
+  </g>
+  <g>
+    <path d="M360 224l-40-35 56 3-16 32z" fill="#C7E58F" stroke="#77A763" stroke-width="6"/>
+    <path d="M400 176l-26 67" stroke="#77A763" stroke-width="8" stroke-linecap="round"/>
+    <path d="M438 174l-24 66" stroke="#77A763" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="406" cy="229" r="9" fill="#4C8F37"/>
+    <path d="M350 263c31-18 67-17 97 0l-8 11c-29-8-56-7-80 4l-9-15z" fill="#A53E35" stroke="#77A763" stroke-width="5"/>
+    <path d="M361 265l8 14M377 264l7 15M393 263l8 16M409 263l8 16M425 264l7 15" stroke="#F1F1F1" stroke-width="3"/>
+    <path d="M445 255c15 8 29 21 38 39" stroke="#77A763" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>

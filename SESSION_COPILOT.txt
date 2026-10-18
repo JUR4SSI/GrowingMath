@@ -1,0 +1,496 @@
+# SESSION_COPILOT — Growing Math
+Data de início : 2026-08-31 08:22
+Projeto        : Growing Math (C:\Growing Math)
+Objetivo       : Plataforma de aprendizagem adaptativa de matemática, gamificada (RPG),
+                 com IA (Gemini / Ollama), empacotada como app desktop Electron para Windows.
+Stack          : React 19 + Vite 6 + TypeScript + TailwindCSS 4 + react-router-dom 7
+                 Express 4 + better-sqlite3 (SQLite local) + @google/genai + Ollama
+                 Electron 36 + electron-builder (NSIS) + esbuild (bundle do server)
+
+## Arquitetura (resumo)
+- server.ts (~140 KB, monolito): Express + SQLite + IA + auth JWT-like próprio + serve o front
+  (Vite middleware em dev, dist/ em prod). Exporta startServer({port, host}).
+- electron/main.mjs: sobe o backend em porta efêmera (127.0.0.1), carrega a URL na BrowserWindow,
+  DB em app.getPath("userData")/growing_math.db, lê segredos de .env/growing-math.env.
+- Dois bundles de front (multi-entry no vite.config.ts):
+  - index.html   -> src/main.tsx        -> src/App.tsx           (app do ALUNO)
+  - teacher.html -> src/teacher-main.tsx -> src/TeacherAccessApp.tsx (portal do PROFESSOR)
+- src/services/geminiService.ts: camada client (chama /api/ai/*, cache de tutor em localStorage,
+  gerador de exercícios offline/fallback determinístico).
+
+## Domínio / features
+- Aluno: trilhas (TOPICS em src/types.ts), combate RPG (CombatView) com exercícios de IA,
+  XP/moedas/nível/streak, classes de herói (Guerreiro/Mago/Arqueiro), inventário e equipamento
+  por slot (weapon_1h/weapon_2h/shield/armor/accessory), loja, conquistas, missões (quests),
+  ranking, desafio diário determinístico por seed, tutor IA em chat, árvore de crescimento.
+- Professor: turmas + código de turma, dashboard pedagógico, relatórios por turma,
+  personalizações por aluno, recomendações, comunicados.
+- Modo demo: usuário demo@growingmath.app e demo.prof@growingmath.app + AutoDemoDirector
+  (tour automático de telas) — controlado por GROWING_MATH_DEMO.
+
+## Tabelas SQLite (server.ts ~L1717)
+users, progress, achievements, items, inventory, classes, class_students,
+teacher_student_personalizations, teacher_class_announcements, quests, user_quests,
+teacher_accounts, feedback, daily_challenge_attempts
+
+## API (principais)
+/api/ai/status|exercise|tutor
+/api/auth/{profiles,register,login,demo-login,me,change-password}
+/api/teacher-auth/{register,login,demo-login}
+/api/user/{:email,update-progress,update-class,equip-item}
+/api/shop, /api/shop/buy, /api/leaderboard
+/api/teacher/{students/search,classes,classes/:id/students,dashboard,reports/class,
+              personalizations,recommendations}
+/api/feedback, /api/daily-challenge, /api/daily-challenge/submit, /api/daily-challenge/history
+
+## IA
+AI_PROVIDER=auto|gemini|ollama. auto -> Gemini se houver GEMINI_API_KEY/GOOGLE_API_KEY,
+senão Ollama local (OLLAMA_BASE_URL, OLLAMA_MODEL, default tinyllama:1.1b), senão fallback
+offline determinístico (fallbackExercise / buildOfflineTutorResponse).
+
+## Build / versionamento
+- npm run dev            -> rebuild better-sqlite3 (node) + tsx server.ts
+- npm run pack:installer -> scripts/versioning.mjs: bump de patch, arquiva release atual em
+                            versionamento/v<versão>, e roda pack:installer:base
+- pack:installer:base    -> electron-rebuild + build:main + build:teacher + build:server + NSIS
+- Versão atual: 0.0.90 (histórico completo em versionamento/, v0.0.0 .. v0.0.89)
+
+## Pontos de atenção
+- server.ts e src/App.tsx são arquivos gigantes (140 KB / 184 KB) — candidatos a modularização.
+- "name" do package.json ainda é "react-example".
+- growing_math.db versionado na raiz (dev); em produção fica em userData.
+- Segredos: AUTH_JWT_SECRET e TEACHER_ACCESS_CODE são OBRIGATÓRIOS quando HOST != loopback
+  (o servidor recusa iniciar). Em modo desktop local são gerados e persistidos na tabela
+  app_secrets. Ver env.example. Nunca commitar .env.
+- Pasta não é repositório git.
+- better-sqlite3 aplica FOREIGN KEYs por padrão (constraints do schema SÃO validadas).
+
+## Histórico de Sessões
+### 2026-08-31 08:22 — Sessão iniciada
+- Leitura e mapeamento completo do projeto (estrutura, arquitetura, API, schema, build).
+
+### 2026-09-21 08:29 — Correção dos 8 pontos críticos de segurança/integridade
+Arquivos alterados: server.ts, src/App.tsx, src/components/DailyChallenge.tsx,
+src/services/geminiService.ts, env.example.
+Arquivos novos: src/auth.ts, scripts/smoke-security.mjs.
+
+1. Recompensas agora são server-authoritative. /api/user/update-progress deixou de aceitar
+   xpGain/coinsGain/masteryIncrease do cliente; passa a receber apenas `action`
+   (exercise_correct | combat_hit | focus_reward) e busca os valores em PROGRESS_REWARDS.
+   Tópico validado contra VALID_TOPIC_IDS. Bônus de XP de equipamento calculado no servidor
+   (getEquippedXpBonusPercent). Tudo dentro de db.transaction() + cooldown por usuário.
+2. Desafio diário (get/submit/history) exige requireAuth e usa auth.sub — não mais `email`
+   no body/query. challengeKey forçado para a chave do dia.
+3. /api/ai/exercise e /api/ai/tutor exigem auth + rate limit por usuário (30/min e 15/min).
+4. /api/auth/profiles restrito a loopback. Rate limit em /api/auth/login, /api/auth/register,
+   /api/teacher-auth/login e /api/teacher-auth/register (mitiga DoS de lockout e brute force
+   do código de acesso de professor).
+5. HOST default mudou de 0.0.0.0 para 127.0.0.1.
+6. Removidos os fallbacks previsíveis de segredo. Nova tabela app_secrets +
+   getOrCreatePersistedSecret(). Fail-fast no boot quando HOST é externo e os segredos estão
+   ausentes, fracos ou com placeholder CHANGE_ME. Código de professor gerado é salvo em
+   teacher-access-code.txt ao lado do banco.
+7. Senhas das contas demo deixaram de ser constantes no código — geradas aleatoriamente.
+8. verifyPassword retorna {ok, needsRehash}; fallback de hash legado só vale quando há pepper
+   configurado, pode ser desligado por AUTH_DISABLE_LEGACY_PASSWORD_FALLBACK e faz migração
+   transparente do hash no login.
+
+Correções adjacentes (bugs encontrados durante a validação):
+- BLOQUEANTE: o seed inseria class_students/user_quests/inventory com user_id=1 fixo; em banco
+  NOVO isso violava a FOREIGN KEY e derrubava o servidor no boot. Agora é guardado por
+  verificação de existência do usuário.
+- /api/user/update-class passou a validar heroClass contra VALID_HERO_CLASSES.
+- /api/shop/buy virou transacional com UPDATE ... WHERE coins >= ? (evita item sem cobrança).
+- getUserPayloadById null-guarded em register/login.
+
+Validação executada: tsc --noEmit OK, vite build OK, build-server OK e
+`node scripts/smoke-security.mjs` com 22/22 asserções passando contra banco novo.
+Code review automatizado executado; achado de severidade média corrigido (rate limit em
+teacher-auth/register + rejeição de placeholders nos segredos).
+
+### 2026-09-21 09:12 — Instalador passa a instalar e configurar o Ollama
+Objetivo: ao terminar o instalador, o app ja funciona com IA local, sem passo manual.
+
+Arquivos novos:
+- installer/installer.nsh   — customizacao NSIS (pagina de escolha do modelo)
+- installer/install-ai.ps1  — bootstrap: instala Ollama, sobe servico, baixa modelo,
+                              valida com geracao real e grava o .env
+
+Arquivos alterados: package.json (build.nsis.include + extraResources), server.ts,
+electron/main.mjs, env.example.
+
+Estrategia escolhida: download durante a instalacao (instalador segue ~146 MB).
+Modelo escolhido pelo usuario numa pagina do instalador:
+qwen2.5:3b (~2 GB, padrao) | qwen2.5:7b (~4,7 GB) | llama3.1:8b (~4,7 GB) | nao instalar.
+
+Fluxo do install-ai.ps1:
+1. Detecta o proxy do Windows e exporta HTTP_PROXY/HTTPS_PROXY (processo + escopo
+   de usuario). CRITICO: o Ollama e escrito em Go e NAO le o proxy do Windows —
+   sem isso o download do modelo trava em "pulling manifest" na rede Deere.
+2. Baixa e instala o OllamaSetup.exe (~1,5 GB) em modo /VERYSILENT, por usuario,
+   sem admin (compativel com allowElevation: false).
+3. Reinicia o Ollama via "ollama app.exe" (tray), que registra o autostart.
+4. Baixa o modelo pela API HTTP /api/pull (NDJSON com progresso).
+5. Valida com uma geracao real ("12 + 7") e mede a latencia.
+6. Grava $INSTDIR\.env com AI_PROVIDER, OLLAMA_MODEL e OLLAMA_BASE_URL.
+Em qualquer falha: grava AI_PROVIDER=auto (modo offline) e sai com codigo 0 —
+falta de IA nunca quebra a instalacao. Log em %LOCALAPPDATA%\GrowingMath\install-ai.log.
+Atalho "Growing Math - Configurar IA local" no menu Iniciar permite tentar de novo.
+
+Correcoes de runtime necessarias para a IA realmente funcionar:
+- server.ts: o timeout de 12s valia tambem para /api/chat. Um modelo local em CPU
+  quase nunca responde nesse tempo, entao TODA geracao abortava e caia no fallback
+  em silencio. Agora sao dois timeouts: sondagem 5s e geracao 120s
+  (configuravel por OLLAMA_TIMEOUT_MS).
+- server.ts: OLLAMA_MODEL era usado sem validacao; nome errado quebrava tudo sem
+  aviso. Agora e conferido contra /api/tags, com log e deteccao automatica.
+- electron/main.mjs: ensureOllamaRunning() sobe o Ollama no boot do app se o
+  usuario tiver fechado o tray.
+
+Bugs encontrados e corrigidos durante os testes reais (nenhum apareceria sem executar):
+- PowerShell: em array literal a virgula tem precedencia sobre o "+", entao
+  "# " + (Get-Date) virava dois elementos e quebrava o .env.
+- PowerShell: Write-Output dentro de funcao entra no VALOR DE RETORNO; retornos
+  booleanos viravam arrays. Trocado por [Console]::Out.WriteLine.
+- PowerShell: "ollama pull" escreve spinners ANSI em stderr que, com
+  ErrorActionPreference=Stop, viram excecao. Trocado pela API /api/pull.
+- HttpClient.PostAsync nao tem sobrecarga com HttpCompletionOption; para ler o
+  stream conforme chega e preciso SendAsync.
+- NSIS: o script e compilado outra vez para gerar o desinstalador, onde a pagina e
+  o customInstall nao existem; variaveis/funcoes sem referencia viram warning 6001/
+  6010 e o electron-builder trata warning como erro. Resolvido com !ifndef BUILD_UNINSTALLER.
+
+Validacao: tsc OK; build-server OK; smoke-security 22/22; instalador NSIS gerado
+(Growing Math Setup 0.0.90.exe, 145,8 MB); bootstrap testado de ponta a ponta com
+qwen2.5:0.5b (pull + geracao em 2s + .env correto); app consumindo o Ollama
+(/api/ai/status runtimeMode=ollama e tutor respondendo pelo modelo local).
+
+PRE-EXISTENTE (nao causado por estas mudancas): o electron-builder termina com
+"Cannot read properties of null (reading 'provider')" na etapa de publish, mesmo
+sem customizacao alguma. O instalador .exe e gerado normalmente antes do erro.
+
+### 2026-09-21 09:31 — Portabilidade: instalador validado e blindado contra WDAC
+
+Pergunta que originou a sessão: "esse instalador e o app vão funcionar em outra máquina?"
+
+VALIDAÇÃO REAL DO INSTALADOR (antes só o build tinha sido testado)
+- Erro descoberto: o teste A/B feito para provar que o erro de 'provider' do
+  electron-builder era pré-existente RECONSTRUIU o .exe SEM a customização e
+  sobrescreveu o instalador. O primeiro teste de instalação rodou o binário errado
+  (sem .env, sem .cmd, sem atalho). Reconstruído e reexecutado.
+- Instalação silenciosa (/S /D=C:\GMInstallTest): exit 0, resources/install-ai.ps1
+  empacotado, .env + configurar-ia.cmd escritos, 2 atalhos criados, app instalado
+  abre janela normalmente, desinstalação remove tudo (só resta a pasta vazia).
+- Flags do Ollama confirmadas: existe unins000.exe na instalação → é Inno Setup,
+  logo /VERYSILENT /SUPPRESSMSGBOXES /NORESTART estão corretas.
+
+BLINDAGEM CONTRA ConstrainedLanguage (install-ai.ps1)
+Políticas WDAC/AppLocker variam por máquina. Nesta imagem
+UsermodeCodeIntegrityPolicyEnforcementStatus=0, por isso o PS 5.1 está em
+FullLanguage. Numa máquina com essa política ativa, Add-Type, New-Object
+(HttpClient), [Console]::Out e [System.Net.WebRequest] lançam exceção e o
+bootstrap morreria. Cada caminho ganhou equivalente só com cmdlets:
+  - Write-Stage        → Write-Host (fora do pipeline, não polui retorno)
+  - download do setup  → Invoke-WebRequest -OutFile (sem % de progresso)
+  - pull do modelo     → POST /api/pull com stream=false (JSON único no fim)
+  - persistir proxy    → Set-ItemProperty em HKCU:\Environment
+  - detectar proxy     → registro WinINET + parser de PAC
+Novo switch -ForceRestrictedMode permite testar o caminho degradado sem precisar
+de uma máquina com WDAC restritivo.
+
+PROXY POR PAC (descoberta importante)
+A rede Deere NÃO usa proxy estático: ProxyEnable=0 e
+AutoConfigURL=http://pac.deere.com/johndeere.com/deere.pac. O fallback por
+registro retornava nulo, e em modo restrito o ollama pull travaria. Get-ProxyFromPac
+baixa o PAC como texto, extrai os literais "PROXY host:porta" e TESTA cada um.
+O alvo da sonda é https://registry.ollama.ai/v2/library/qwen2.5/manifests/0.5b
+(HTTP 200) e não /v2/ — este responde 404 mesmo com o proxy funcionando, o que
+tornaria qualquer página de erro de proxy um falso positivo.
+
+TESTES EXECUTADOS
+- Sintaxe (Parser::ParseFile): 0 erros.
+- Modo degradado ponta a ponta: PAC resolvido → 185.46.212.90:80 validado →
+  Ollama reiniciado → pull real de 379 MB → geração correta em 3,1s → .env gravado.
+- Modo normal (FullLanguage): sem regressão.
+- Build NSIS: sem warning 6xxx.
+
+RISCOS AINDA EM ABERTO
+1. Install-Ollama (download de 1,5 GB + instalação silenciosa) continua NUNCA
+   executado — nesta máquina o Ollama já existia. É a maior lacuna.
+2. Instalador sem assinatura digital → SmartScreen avisa; política corporativa
+   pode bloquear.
+3. Proxy com autenticação NTLM explícita não testado (aqui é transparente).
+4. Requisito de ~5 GB livres em disco não validado.
+
+EFEITOS COLATERAIS DOS TESTES NESTA MÁQUINA (remover se incomodar)
+- Variáveis de usuário HTTP_PROXY/HTTPS_PROXY/NO_PROXY gravadas no perfil.
+- Modelo qwen2.5:0.5b (379 MB) instalado no Ollama.
+
+### 2026-09-21 10:00 — Preparação para hospedar os dados na AWS
+
+Pedido: "a ideia seria apenas as informações ficarem no servidor, o app vai
+rodar sempre localmente, então seria basicamente para banco de dados".
+
+DECISÃO DE ARQUITETURA
+Hospedar o server.ts + banco na AWS, e não ligar o app direto num banco remoto.
+Dois motivos concretos:
+ 1. better-sqlite3 é SÍNCRONO e há 128 chamadas diretas de db.prepare/exec/
+    transaction no server.ts. Qualquer driver de banco remoto é assíncrono →
+    seria preciso reescrever todos os handlers.
+ 2. Ligar cada app direto no banco exigiria distribuir a credencial do banco
+    para toda máquina; qualquer usuário poderia ler/alterar os dados de todos.
+O app continua rodando e servindo a interface localmente; só as chamadas /api
+vão para a nuvem. Modo local segue sendo o padrão e o fallback.
+
+IMPLEMENTADO
+- NOVO src/config.ts: resolve a base da API em RUNTIME (não em build, para que
+  trocar de servidor não exija recompilar o instalador). Lê
+  window.__GROWING_MATH_CONFIG__.apiBaseUrl, com fallback para
+  import.meta.env.VITE_API_BASE_URL (usado no `npm run dev`, onde quem serve é
+  o Vite). Exporta apiUrl(), getApiBaseUrl(), isRemoteApi().
+- 41 chamadas fetch('/api/...') passaram a fetch(apiUrl('/api/...')) em App.tsx
+  (21), TeacherAccessApp.tsx (14), DailyChallenge.tsx (3), FeedbackForm.tsx (1)
+  e geminiService.ts (2 — uma dentro de postJson, que recebe a url por
+  parâmetro). Confirmado que não há EventSource/WebSocket/XHR/sendBeacon.
+- server.ts: injectRuntimeConfig() injeta a config no HTML logo após <head>,
+  com escape de < e > para não permitir quebrar a tag <script>. O bloco de
+  estáticos foi reordenado — as rotas de HTML vêm ANTES de express.static
+  (agora com index:false), senão o static serviria o HTML cru sem a injeção.
+- server.ts: corsMiddleware(). Aceita qualquer origem loopback por padrão
+  porque a porta do app muda a cada inicialização. É seguro porque a auth é
+  por Bearer token em header, não cookie — um site malicioso não tem o token.
+  Configurável por CORS_ALLOWED_ORIGINS e CORS_ALLOW_LOOPBACK.
+- server.ts: rota /api inexistente agora devolve JSON 404 em vez de cair no
+  catch-all que servia index.html com status 200. Sem isso, com a API na AWS,
+  qualquer erro de rota viraria "Unexpected token '<'" no res.json() do
+  cliente, escondendo a causa real.
+- electron/main.mjs: API_BASE_URL entrou na lista de chaves de loadRuntimeSecrets.
+- NOVO DEPLOY-AWS.md e seção nova no env.example.
+- NOVO scripts/smoke-remote.mjs (17 asserções) + scripts npm: smoke:prepare,
+  smoke:security, smoke:remote e smoke (roda tudo).
+
+COMO ATIVAR, QUANDO O SERVIDOR EXISTIR
+Servidor: HOST=0.0.0.0, GROWING_MATH_DB_PATH num volume EBS, AUTH_JWT_SECRET +
+AUTH_PASSWORD_PEPPER + TEACHER_ACCESS_CODE (o servidor já se recusa a iniciar
+fora do loopback sem eles), HTTPS na frente.
+Máquina do usuário: uma linha no .env ao lado do .exe:
+  API_BASE_URL=https://api.growingmath.suaempresa.com
+Apagar a linha volta ao modo local. Não precisa reinstalar.
+
+TESTES
+- tsc --noEmit: 0 erros.
+- smoke:remote 17/17: config vazia no modo local e API local respondendo;
+  URL injetada e barra final removida no modo remoto; teacher.html também
+  recebe a config; /api inexistente → 404 JSON; rota de front → index;
+  preflight loopback 204 com eco da origem e Authorization liberado; origem
+  desconhecida → 403 sem allow-origin; requisição sem Origin passa; allowlist
+  explícita funciona e CORS_ALLOW_LOOPBACK=false bloqueia loopback.
+- smoke:security 22/22 (sem regressão).
+- Instalador NSIS regenerado com o front novo, sem warnings.
+
+PENDENTE ANTES DE PRODUÇÃO (ver checklist no DEPLOY-AWS.md)
+PRAGMA journal_mode=WAL (crítico com vários alunos), backup do .db, índices por
+user_id, helmet + limite de tamanho no express.json, e um importador para os
+perfis que hoje já existem localmente em %APPDATA% (não sobem sozinhos).
+
+## Pendências- Altos ainda abertos: helmet/CORS, /api/feedback sem auth, scryptSync bloqueando o event loop,
+  índices por user_id, middleware global de erro.
+- tsconfig sem `strict`.
+- ~13 GB em versionamento/release/release-latest/release-installer; projeto sem git.
+- IA: nao ha verificacao de correcao matematica do exercicio gerado
+  (isExerciseAlignedWithTopic so confere o topico). Um modelo local pode devolver
+  correctAnswerIndex errado e o app pune o aluno que acertou.
+- IA: em AI_PROVIDER=auto com chave Gemini presente, o Ollama nunca e usado —
+  nao existe cadeia de fallback Gemini -> Ollama.
+- IA: geometria-basica sempre usa exercicio estatico, nunca IA.
+- Erro de publish do electron-builder (pre-existente) nao investigado.
+
+## Próximos Passos
+- Decidir se ataca os itens "altos" (#9 a #15 da análise) ou a organização (git + limpeza de builds).
+
+## Como rodar o teste de segurança
+```
+npm rebuild better-sqlite3
+node scripts/build-server.mjs
+$env:GROWING_MATH_AUTOSTART="false"; $env:GROWING_MATH_DEMO="true"; $env:NODE_ENV="production"
+$env:GROWING_MATH_DB_PATH="$env:TEMP\gm_test.db"
+node scripts/smoke-security.mjs
+```
+
+### 2026-09-21 13:29 - 5a rodada: novos pontos de melhoria
+Auditoria em areas ainda nao cobertas (dominio/jogo, schema, Electron, build).
+12 achados novos - nenhum corrigido ainda:
+ [CRIT] Bug de fuso no desafio diario (server.ts:1703 UTC vs :1784 local) - comprovado
+ [CRIT] /api/leaderboard sem auth (server.ts:3479) - expoe nomes de alunos (LGPD na AWS)
+ [CRIT] vite.config.ts:33 define injeta GEMINI_API_KEY no bundle do cliente (latente)
+ [ALTO] progress(user_id,topic) sem UNIQUE nem indice (server.ts:1859)
+ [ALTO] submit do desafio diario sem db.transaction (server.ts:4022)
+ [ALTO] migracoes ad-hoc sem PRAGMA user_version
+ [ALTO] Electron sem will-navigate/CSP - link markdown do tutor sequestra a janela
+ [ALTO] sem autoUpdater - cada fix exige redistribuir 146 MB
+ [MED ] zero testes automatizados alem dos 2 smokes
+ [MED ] sem code splitting (main 791 kB); terserOptions ignorado; visualizer morto
+Pendencia: aguardando escolha do usuario sobre o que corrigir primeiro.
+
+### 2026-09-21 13:38 - Correcao dos 3 criticos da 5a rodada
+[OK] #1 Fuso do desafio diario (server.ts)
+     Novo APP_TIMEZONE (padrao America/Sao_Paulo) + localDayKey() via Intl.
+     dailyChallengeKey() e challengeKeyDaysAgo() agora usam o MESMO dia civil.
+     challengeKeyDaysAgo faz aritmetica ancorada em UTC de proposito (reformatar
+     pelo fuso reaplicaria o offset e voltaria um dia).
+[OK] #2 /api/leaderboard passou a exigir requireAuth("user");
+     cliente atualizado (App.tsx:2750) para enviar getUserAuthHeaders().
+[OK] #3 Removido o define de GEMINI_API_KEY do vite.config.ts (+ loadEnv orfao).
+     Era vazamento LATENTE, nao ativo: o bundle atual estava limpo.
+
+Testes: smoke-security passou de 22 para 26 assercoes (leaderboard 401/200 +
+invariante "chave do desafio == primeiro dia do historico").
+A/B com o bug reintroduzido: a assercao FALHA. Sem o bug: passa. Validado tambem
+sob APP_TIMEZONE=Pacific/Kiritimati (UTC+14).
+tsc limpo | smoke:security 26/26 | smoke:remote 17/17 | binding restaurado p/ Electron.
+
+GOTCHA: os smokes importam build/server.mjs (bundle). Editar server.ts NAO basta -
+e preciso 'node scripts/build-server.mjs' antes, senao testa-se o build anterior.
+
+Docs: APP_TIMEZONE documentado em env.example e DEPLOY-AWS.md; checklist de
+producao ganhou o item de instancia unica (submit do desafio sem transacao).
+
+Pendentes da 5a rodada: #4 indice/UNIQUE em progress, #5 transacao no submit,
+#6 migracoes sem user_version, #7 will-navigate/CSP no Electron, #8 autoUpdater,
+#9 testes automatizados, #10-12 code splitting/terser/visualizer.
+
+### 23/09 11:35 - 6a rodada: correcao estrutural da tela Trilhas
+Sintoma (screenshot do usuario): badges f(x)/sin/INT flutuando fora dos cards,
+rotulos sobrepostos, "Picos Trigono..." cortado, icones fora da trilha.
+
+3 causas raiz encontradas:
+ 1. Duas listas de coordenadas independentes - o <path> da trilha era uma string
+    literal e os nos vinham de TOPICS. Agora journeyPath e DERIVADO de TOPICS.
+ 2. framer-motion apaga transform inline - motion.div com animate={{scale}} e
+    style={{transform:'translate(-50%,-50%)'}} tem o translate sobrescrito.
+    Solucao: wrapper h-0 w-0 (ponto = origem) + centralizacao via classes Tailwind.
+ 3. Wrapper do icone sem 'relative' - runa, anel de progresso e estrela se
+    ancoravam no <Link> inteiro em vez do icone. Era o que aparecia solto.
+
+Arquivos: src/types.ts (TOPICS x 26-74, y 8/21/34/47/60/73/86), src/App.tsx (JourneyMap).
+Extras: acentos corrigidos em stageLore, aura circular centrada, anel com viewBox,
+rotulos sem whitespace-nowrap, clamps safeX/safeY.
+
+Verificacao por medicao de DOM (svg.getScreenCTM + matrixTransform), nao "no olho":
+  desktop 1600x900 -> desvio 0,0px nos 7 nos | 0 sobreposicoes | 0 vazamentos
+  celular  390x844 -> desvio 0,0px nos 7 nos | 0 sobreposicoes | 0 vazamentos
+NOTA: medir contra container.getBoundingClientRect() da falso gradiente de +-3px
+      porque % em position:absolute usa o padding box e o rect inclui a border-4.
+
+ACHADO ADJACENTE (nao corrigido, pre-existente, fora desta tela):
+  cabecalho global 'flex items-center gap-4 lg:gap-6' estoura a viewport abaixo
+  de 768px (scrollWidth 535 vs 375). Nao e regressao do mapa.
+
+Instalador regerado COM as correcoes de layout:
+  C:\Growing Math\release\Growing Math Setup 0.0.90.exe (145,8 MB, 23/09 11:30)
+  Verificado dentro do app.asar: z-10 h-0 w-0, min-h-[1240px], translate, viewBox.
+Binding nativo restaurado para Electron.
+
+### 23/09 13:10 - 7a rodada: redesenho da arena de batalha
+Pedido: "deixar a batalha mais estetica e bonita".
+Diagnostico: a camada de EFEITOS ja era rica (flash, trilhas, arcos, aneis
+arcanos, flechas, numeros de dano, shake). O problema era a COMPOSICAO PARADA.
+
+BUG real encontrado (nao era gosto):
+  <div class="w-72 h-48 ... overflow-hidden">
+    <div class="absolute -top-4 ...">Dragao da Matematica</div>
+  O nome do inimigo estava em -top-4 dentro de overflow-hidden -> cortado.
+  Era a "barra verde cortada" no topo do card. O vilao estava anonimo por acidente.
+
+Mudancas (src/App.tsx):
+ 1. Linguagem visual unica: palco de mesmo tamanho nos dois lados, mesma ordem
+    (retrato -> placa de nome -> HP). Removida a borda lime-300 que brigava com
+    a paleta slate/emerald; agora emerald = aliado, rose = inimigo.
+ 2. Estado/Combo saem da coluna do heroi para um HUD no topo (absolute), que
+    preserva a geometria percentual dos efeitos de ataque.
+ 3. BattleHpBar novo: cor por razao (emerald>0.6 / amber>0.3 / rose) + BARRA-FANTASMA
+    que drena com atraso de 0.28s mostrando o tamanho do dano + marcacoes.
+    Antes o inimigo ficava VERMELHO com 212/212. Tem role=progressbar e aria-*.
+ 4. VS virou medalhao com filete vertical (antes slate-600 sobre slate-900, invisivel).
+ 5. Chao: elipse de sombra + aura sob cada combatente, piso em gradiente e vinheta.
+ 6. Combo vira badge que pulsa (key={combo} + spring).
+ 7. RpgHeroAvatar ganhou size '2xl' e prop frameless (aditivos, defaults intactos).
+ 8. Altura de coluna fixa: as colunas tinham 269 vs 294px e os RETRATOS ficavam
+    13px fora de nivel. Corrigido para h-[16rem]/md:h-[19rem].
+ 9. Arena responsiva: antes estourava (641px de conteudo em 343px de largura).
+10. Acentos: 'Critico'/'Arranhoes' -> 'Critico'/'Arranhoes' com acento.
+
+ARMADILHA DE EMPILHAMENTO (quase virou regressao):
+  z-10 nas colunas jogaria os efeitos de ataque PARA TRAS dos personagens.
+  Solucao: tudo em z-auto (exceto o HUD) e confiar na ordem do DOM.
+  Provado em execucao: 7 elementos de FX renderizados depois das colunas, todos z-auto.
+
+Verificacao por medicao (Playwright, nao "no olho"):
+  celular 390 / tablet 768 / desktop 1600 -> retratos com desvio 0,0px,
+  0 vazamentos, arena sem overflow nos tres.
+  Barra-fantasma amostrada a 50ms: atrasou em 11 quadros, folga maxima de 66,3px.
+  smoke:security 26/26 | smoke:remote 17/17 | tsc 0 erros.
+
+NOTA: elementFromPoint NAO serve para testar ordem de pintura aqui - ele ignora
+      elementos pointer-events-none. Use z-index computado + ordem do DOM.
+
+Instalador regerado COM a nova arena:
+  C:\Growing Math\release\Growing Math Setup 0.0.90.exe (145,8 MB, 23/09 13:10)
+  No app.asar: "Vida do inimigo" e "h-[19rem]" presentes; "border-lime-300" e
+  "Inimigo (HP:" ausentes (codigo antigo removido de fato).
+Binding nativo de volta em Electron.
+
+PENDENTE (pre-existente, fora desta tela): o cabecalho global
+'flex items-center gap-4 lg:gap-6' estoura a viewport abaixo de 768px.
+
+================================================================================
+8a RODADA - 23/09 - BALANCEAMENTO DA BATALHA (fim do "hitkill")
+================================================================================
+PEDIDO: "tem como fazer o vilao nao tomar hitkill? acho um acerto e derrotar fica
+        meio sem graca"
+
+DIAGNOSTICO REAL (nao era hitkill):
+  Ja existia um teto de 35% do HP por golpe, logo matematicamente nunca foi 1
+  acerto - eram SEMPRE exatos 3 acertos, para toda classe e todo nivel.
+  A causa: enemyMaxHp = 100 + min(140, nivel*8) travava em 240 de HP, entao o
+  teto (35% = 84) ficava SEMPRE abaixo do dano bruto.
+  Simulacao: em 22 de 24 cenarios raw > cap. No nivel 20 com critico + combo o
+  dano bruto era 624 e o aplicado 84 (descartava 87%).
+  CONSEQUENCIA: critico, combo, maestria, nivel e equipamento eram DECORATIVOS.
+  O banner "CRITICO!" mentia - o numero era identico ao de um acerto normal.
+
+CORRECAO (src/App.tsx):
+  L~1766  enemyMaxHp      = 100 + (user?.level || 1) * 25    (era 100+min(140,lv*8))
+  L~2134  maxDamagePerHit = max(12, round(enemyMaxHp * 0.4)) (era 0.35)
+  Ideia: o HP passa a escalar com o nivel, e o teto vira rede de seguranca
+  (piso de ~3 golpes) em vez de ser o valor que manda em todo golpe.
+
+RESULTADO MEDIDO (simulacao com a formula transcrita literal do fonte):
+  maestria 100 (topico dominado):  3 a 5 acertos
+  maestria 0   (topico novo)    :  3 a 7 acertos (Guerreiro e o mais lento)
+  Teto ativo em 16% dos golpes (antes: 100%).
+  Critico agora encurta a luta de verdade - coluna comCrit difere da semCrit.
+
+  classe      nv1   nv10   nv20   nv33   nv50    (semCrit/comCrit, maestria 100)
+  Mago        3/3    3/3    4/3    4/3    4/3
+  Arqueiro    3/3    4/3    4/3    4/3    5/3
+  Guerreiro   4/3    5/3    5/3    5/3    5/3
+  HP do inimigo: nv1=125  nv14=450  nv20=600  nv33=925  nv50=1350
+
+VALIDADO NO APP RODANDO (Playwright, servidor em 127.0.0.1:4173):
+  Barra do inimigo leu 450/450 com o demo no nivel 14  -> 100 + 14*25 = 450  OK
+  Barra do inimigo leu 925/925 com o demo no nivel 33  -> 100 + 33*25 = 925  OK
+  Formula nova confirmada ao vivo em dois niveis diferentes.
+  (a contagem de golpes por UI nao fechou porque o resolvedor automatico de
+   questoes errava o indice; a formula foi entao conferida linha a linha contra
+   App.tsx L2124-2138 e reproduzida em simulacao)
+
+EFEITO COLATERAL OBSERVADO (pre-existente, nao alterado):
+  Cada resposta errada tira 28 de vida do heroi; com 178 de HP, 7 erros matam.
+  Como a luta agora exige 3-5 acertos, sobra folga de ~6 erros por batalha.
+
+Instalador regerado COM o balanceamento:
+  C:\Growing Math\release\Growing Math Setup 0.0.90.exe (145,8 MB, 23/09 13:38)
+  Verificado dentro do app.asar: "(level||1)*25" presente, "Math.round(b*.4)"
+  presente, "Math.min(140" com ZERO ocorrencias (formula antiga removida).
+Binding nativo de volta em Electron. tsc 0 erros. build:web OK.

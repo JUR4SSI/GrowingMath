@@ -1,0 +1,22 @@
+node_modules/
+.node_env/
+build/
+dist/
+coverage/
+release/
+release-latest/
+release-installer/
+versionamento/
+*.log
+.env*
+!.env.example
+.DS_Store
+
+# dados locais e segredos
+*.db
+*.db-shm
+*.db-wal
+teacher-access-code.txt
+.playwright-mcp/
+*.exe
+gitignore.txt
